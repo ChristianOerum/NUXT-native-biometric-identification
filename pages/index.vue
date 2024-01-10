@@ -46,6 +46,7 @@ export default {
 
   methods: {
 
+    //addUser function
     async addUserData(credentialId){
       addDoc(collection(db, "users"), { 
         name: "test",
@@ -54,8 +55,27 @@ export default {
       })
     },
 
-    async readUserData(){
-      const db = this.$firebase.database();
+    //readUser info function
+    async readUserData(creds){
+      try {
+          //query user DB for account with matching biometic credentials
+          const docRef = await getDocs(
+            query(collection(db, "users"), where("authID", "==", creds))
+          );
+
+          //get user info - and assign, if any
+          let tempArr = []
+          docRef.forEach((doc) => {
+            tempArr.push(doc.data())
+          })
+
+          return tempArr
+      
+      //log error if issue with DB query
+      } catch (error) {
+          console.error(error);
+        }
+
     },
 
     async checkIsRegistered() {
@@ -87,34 +107,18 @@ export default {
       const parsed = parsers.parseAuthentication(res)
       console.log(parsed.credentialId)
 
-      try {
-          //query user DB for account with matching biometic credentials
-          const docRef = await getDocs(
-            query(collection(db, "users"), where("authID", "==", parsed.credentialId))
-          );
-
-          //get user info - and assign, if any
-          let tempArr = []
-          docRef.forEach((doc) => {
-            tempArr.push(doc.data())
-          })
-
-          //if user with credentials found.
-          if (tempArr.length != 0) {
-            console.log(tempArr[0])
+      let response = await this.readUserData(parsed.credentialId)
+       //if user with credentials found.
+       if (response.length != 0) {
+            console.log(response[0])
             this.isAuthenticated = true
-          this.authenticationData = parsed
+            this.authenticationData = parsed
           } 
-          
-          //if user cant be found
-          else {
-            console.log("Invalid user credentials")
-          }
-      
-      //log error if issue with DB query
-      } catch (error) {
-          console.error(error);
-        }
+
+      //if user cant be found
+      else {
+        console.log("Invalid user credentials")
+      }
 
     },
 
