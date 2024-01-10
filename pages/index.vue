@@ -29,6 +29,8 @@
 
 <script>
 import { client, parsers } from '@passwordless-id/webauthn';
+import { doc, updateDoc, addDoc, collection, getDocs, where, query, deleteDoc } from "firebase/firestore";
+import { db } from '~/api/firebase.js';
 
 export default {
   data() {
@@ -43,10 +45,24 @@ export default {
   },
 
   methods: {
+
+    async addUserData(credentialId){
+      addDoc(collection(db, "users"), { 
+        name: "test",
+        email: "text@bubbles.dk",
+        authID: credentialId
+      })
+    },
+
+    async readUserData(){
+      const db = this.$firebase.database();
+    },
+
     async checkIsRegistered() {
-      console.log(this.username + ' => ' + !!window.localStorage.getItem(this.username))
+      //console.log(this.username + ' => ' + !!window.localStorage.getItem(this.username))
       this.isRegistered = !!window.localStorage.getItem(this.username)
     },
+
     async register() {
       let res = await client.register(this.username, window.crypto.randomUUID(), { authType: 'auto' })
       console.debug(res)
@@ -58,35 +74,52 @@ export default {
       this.isAuthenticated = true
       this.registrationData = parsed
 
-      //this.$buefy.toast.open({
-      //  message: 'Registered!',
-      //  type: 'is-success'
-      //})
+      await this.addUserData(parsed.credential.id)
 
       await this.checkIsRegistered()
     },
+
     async login() {
       let credentialId = window.localStorage.getItem(this.username)
       let res = await client.authenticate(credentialId ? [credentialId] : [], window.crypto.randomUUID(), { authType: 'auto' })
       console.debug(res)
 
       const parsed = parsers.parseAuthentication(res)
-      console.log(parsed)
+      console.log(parsed.credentialId)
 
-      this.isAuthenticated = true
-      this.authenticationData = parsed
+      try {
+          //query user DB for account with matching biometic credentials
+          const docRef = await getDocs(
+            query(collection(db, "users"), where("authID", "==", parsed.credentialId))
+          );
 
-      //this.$buefy.toast.open({
-      //  message: 'Signed in!',
-      //  type: 'is-success'
-      //})
+          //get user info - and assign, if any
+          let tempArr = []
+          docRef.forEach((doc) => {
+            tempArr.push(doc.data())
+          })
+
+          //if user with credentials found.
+          if (tempArr.length != 0) {
+            console.log(tempArr[0])
+            this.isAuthenticated = true
+          this.authenticationData = parsed
+          } 
+          
+          //if user cant be found
+          else {
+            console.log("Invalid user credentials")
+          }
+      
+      //log error if issue with DB query
+      } catch (error) {
+          console.error(error);
+        }
+
     },
+
     async logout() {
       this.isAuthenticated = false;
-      this.$buefy.toast.open({
-        message: 'Signed out!',
-        type: 'is-success'
-      })
       this.authenticationData = null
       this.registrationData = null
     }
